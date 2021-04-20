@@ -22,6 +22,7 @@ public:
 // This map will aid in reading the Inventory CSV file.
 // A map is a key and value pair. In this map, the name of the item will be the key and an object of the Item class will be the value.
 map<string, Item> Inventory;
+map<string, Item> AlreadyAddedItems;
 
 //This map was created to minimize the repetition of menu prompts. We will simply create the menus in this map and access them accordingly.
 // So far, we just have the Main Menu called "MainMenu" and it only has one prompt inside the vector.
@@ -40,13 +41,17 @@ void clearScreen();
 void pauseThenClearScreen();
 void showMenu(const string&);
 void checkNextStepBasedOnMenu(string&, string&);
+bool didFileOpen(ifstream&);
+bool didFileOpen(ofstream&);
 
 void addItemToInventory();
+void loadInventoryFromFile();
+bool doesItemAlreadyExist(string);
 void viewInventory();
 
 int main() {
     string option;
-    string thisMenuName = "MainMenu";
+    string thisMenuName{ "MainMenu" };
     do {
         showMenu(thisMenuName);
         cin >> option;
@@ -70,40 +75,6 @@ void showMenu(const string& menuNameKey) {
     cout << "Enter Option Number(0 to Exit): ";
 }
 
-bool is_digits(const string& str) {
-    return str.find_first_not_of("0123456789") == string::npos;
-}
-
-void showInvalidOptionError() {
-    cout << "Invalid, Try again\n";
-    pauseThenClearScreen();
-}
-
-void pauseScreen() {
-    cout << "Press any key to continue...\n";
-    cin.ignore();
-    cin.get();
-}
-
-void clearScreen() {
-// These are macros.
-// Unfortunately, depending on the Operating System, the command is different to clear the console screen.
-// So, I'm checking to see if the user is using (linux or unix or mac) or (32-bit or 64-bit Windows)
-// This is just to make sure the code is more portable. If I just used the system("cls") command, it would only work on Windows computers.
-#if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
-    system("clear");
-#endif
-
-#if defined(_WIN32) || defined(_WIN64)
-    system("cls");
-#endif
-}
-
-void pauseThenClearScreen() {
-    pauseScreen();
-    clearScreen();
-}
-
 void checkNextStepBasedOnMenu(string& option, string& menuName) {
     int optionNum = stoi(option);
     if (menuName == "MainMenu") {
@@ -123,34 +94,9 @@ void checkNextStepBasedOnMenu(string& option, string& menuName) {
     }
 }
 
-void addItemToInventory() {
-    ofstream inventoryFile{ "Inventory.csv", ios_base::app };
-    if (!inventoryFile.is_open()) {
-        cout << "Couldn't open file...\n";
-        pauseThenClearScreen();
-        return;
-    }
-    Item item;
-    cout << "\n";
-    cout << "Enter the Item's Name: ";
-    cin.ignore();
-    getline(cin, item.name);
-    cout << "Enter the Item's Price: ";
-    cin >> item.price;
-    cout << "Enter the Item's Amount: ";
-    cin >> item.amount;
-    inventoryFile << item.name << "," << item.price << "," << item.amount << endl;
-    inventoryFile.close();
-    pauseThenClearScreen();
-}
-
-void viewInventory() {
+void loadInventoryFromFile() {
     ifstream inventoryFile{ "Inventory.csv" };
-    if (!inventoryFile.is_open()) {
-        cout << "Couldn't open file...\n";
-        pauseThenClearScreen();
-        return;
-    }
+    if (!didFileOpen(inventoryFile)) { return; }
     string rowString, colString;
     Item item;
     vector<string> row;
@@ -170,6 +116,30 @@ void viewInventory() {
         Inventory[item.name].price += item.price;   // add price if duplicate item name is found
         Inventory[item.name].amount += item.amount; // add amount if duplicate item name is found
     }
+    inventoryFile.close();
+}
+
+void addItemToInventory() {
+    loadInventoryFromFile();
+    ofstream inventoryFile{ "Inventory.csv", ios_base::app };
+    if (!didFileOpen(inventoryFile)) { return; }
+    Item item;
+    cout << "\n";
+    cout << "Enter the Item's Name: ";
+    cin.ignore();
+    getline(cin, item.name);
+    if (doesItemAlreadyExist(item.name)) { return; }
+    cout << "Enter the Item's Price: ";
+    cin >> item.price;
+    cout << "Enter the Item's Amount: ";
+    cin >> item.amount;
+    inventoryFile << item.name << "," << item.price << "," << item.amount << endl;
+    inventoryFile.close();
+    pauseThenClearScreen();
+}
+
+void viewInventory() {
+    loadInventoryFromFile();
     clearScreen();
     // Table Headers
     int colWidth{ 60 };
@@ -181,6 +151,64 @@ void viewInventory() {
         // C-Style console printing to specify spacing for table display.
         printf("| %-20s | $%-20.2f | %d\n", (*it).second.name.c_str(), (*it).second.price, (*it).second.amount);
     }
-    inventoryFile.close();
     pauseThenClearScreen();
+}
+
+bool is_digits(const string& str) {
+    return str.find_first_not_of("0123456789") == string::npos;
+}
+
+void showInvalidOptionError() {
+    cout << "Invalid, Try again\n";
+    pauseThenClearScreen();
+}
+
+void pauseScreen() {
+    cout << "Press any key to continue...\n";
+    cin.ignore();
+    cin.get();
+}
+
+void pauseThenClearScreen() {
+    pauseScreen();
+    clearScreen();
+}
+
+bool didFileOpen(ifstream& inventoryFile) {
+    if (!inventoryFile.is_open()) {
+        cout << "Couldn't open file...\n";
+        pauseThenClearScreen();
+        return false;
+    }
+    return true;
+}
+bool didFileOpen(ofstream& inventoryFile) {
+    if (!inventoryFile.is_open()) {
+        cout << "Couldn't open file...\n";
+        pauseThenClearScreen();
+        return false;
+    }
+    return true;
+}
+
+bool doesItemAlreadyExist(string itemName) {
+    if (Inventory.find(itemName) != Inventory.end()) {
+        cout << "This Item already exists. Going back main menu..\n";
+        return true;
+    }
+    return false;
+}
+
+void clearScreen() {
+// These are macros.
+// Unfortunately, depending on the Operating System, the command is different to clear the console screen.
+// So, I'm checking to see if the user is using (linux or unix or mac) or (32-bit or 64-bit Windows)
+// This is just to make sure the code is more portable. If I just used the system("cls") command, it would only work on Windows computers.
+#if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
+    system("clear");
+#endif
+
+#if defined(_WIN32) || defined(_WIN64)
+    system("cls");
+#endif
 }
