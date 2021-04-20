@@ -30,9 +30,9 @@ map<string, Item> Inventory;
 // In the vector, we're just going to store all the prompts of each menu.
 map<string, vector<string>> MenuList{
     { "MainMenu", { "1|> Add an Inventory Item\n", "2|> View Inventory\n", "3|> Search Inventory\n" } },
-    { "ViewMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n" } }
+    { "ViewInventoryMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n" } }
 };
-bool localInventoryUpdated{ false };
+bool localInventoryIsUpdated{ false };
 
 // Funtion Declarations
 // Helper Functions: Most of these are to help with minimizing code repetition or error checking.
@@ -41,49 +41,65 @@ bool is_digits(const string&);
 void pauseScreen();
 void clearScreen();
 void pauseThenClearScreen();
-void showMenu(const string&);
-void checkNextStepBasedOnMenu(string&, string&);
+void showMenuAndCheckOption(const string&, string&);
+void checkNextStepBasedOnMenu(string&, const string&);
 bool didFileOpen(ifstream&);
 bool didFileOpen(ofstream&);
-bool isLocalInventoryUpdated();
-bool doesItemAlreadyExist(string);
-void printRowOfInventory(string, float, int);
+bool doesItemAlreadyExist(string&);
+void printRowOfInventory(string&, float&, int&);
 void createTableHeaders();
+void flushInputBuffer();
+
+//Menu functions
+int main();
+void viewInventoryMenu();
 
 // Main Functionality Functions
 void addItemToInventory();
 void loadInventoryFromFile();
 void viewInventory();
 void searchInventory();
+void editInventoryItem();
 
 int main() {
-    string option;
+    string option{ "" };
     string thisMenuName{ "MainMenu" };
+    showMenuAndCheckOption(thisMenuName, option);
+
+    cout << "Thanks for using the program! See Ya!" << endl;
+    return 0;
+}
+
+void viewInventoryMenu() {
+    string option{ "" };
+    string thisMenuName{ "ViewInventoryMenu" };
+    showMenuAndCheckOption(thisMenuName, option);
+}
+
+void showMenuAndCheckOption(const string& menuNameKey, string& option) {
     do {
-        showMenu(thisMenuName);
+        if (menuNameKey == "ViewInventoryMenu") {
+            viewInventory();
+            cout << "\n\n";
+        }
+        for (int x{ 0 }; x < MenuList[menuNameKey].size(); x++) {
+            cout << MenuList[menuNameKey].at(x);
+        }
+        cout << "\n";
+        cout << "Enter Option Number(0 to Exit): ";
         cin >> option;
         cin.ignore();
 
         if (option.length() != 1 || !is_digits(option)) {
             showInvalidOptionError();
+            pauseThenClearScreen();
         } else {
-            checkNextStepBasedOnMenu(option, thisMenuName);
+            checkNextStepBasedOnMenu(option, menuNameKey);
         }
     } while (option != "0");
-
-    cout << "Thanks for using this program. Bye!" << endl;
-    return 0;
 }
 
-void showMenu(const string& menuNameKey) {
-    for (int x{ 0 }; x < MenuList[menuNameKey].size(); x++) {
-        cout << MenuList[menuNameKey].at(x);
-    }
-    cout << "\n";
-    cout << "Enter Option Number(0 to Exit): ";
-}
-
-void checkNextStepBasedOnMenu(string& option, string& menuName) {
+void checkNextStepBasedOnMenu(string& option, const string& menuName) {
     int optionNum = stoi(option);
     if (menuName == "MainMenu") {
         switch (optionNum) {
@@ -91,10 +107,11 @@ void checkNextStepBasedOnMenu(string& option, string& menuName) {
                 return;
             case 1:
                 addItemToInventory();
+                flushInputBuffer();
                 pauseThenClearScreen();
                 break;
             case 2:
-                viewInventory();
+                viewInventoryMenu();
                 pauseThenClearScreen();
                 break;
             case 3:
@@ -103,22 +120,36 @@ void checkNextStepBasedOnMenu(string& option, string& menuName) {
                 break;
             default:
                 showInvalidOptionError();
+                pauseThenClearScreen();
+                return;
+        }
+    } else if (menuName == "ViewInventoryMenu") {
+        switch (optionNum) {
+            case 0:
+                return;
+            case 1: //todo: Edit an Item
+                break;
+            case 2: //todo: Delete an Item
+                break;
+            default:
+                showInvalidOptionError();
+                pauseThenClearScreen();
                 return;
         }
     }
 }
 
 void loadInventoryFromFile() {
-    if (isLocalInventoryUpdated()) { return; }
+    if (localInventoryIsUpdated) { return; }
     ifstream inventoryFile{ "Inventory.csv" };
     if (!didFileOpen(inventoryFile)) { return; }
     string rowString, colString;
     Item item;
     vector<string> row;
     while (getline(inventoryFile, rowString)) {
-        row.clear();
-        stringstream str{ rowString };
-        while (getline(str, colString, ',')) {
+        row.clear();                       // empty the vector so it doesn't keep on appending passed index 2
+        stringstream strTemp{ rowString }; // This is to help with the getline fucntion, since it expects an istream
+        while (getline(strTemp, colString, ',')) {
             row.push_back(colString);
         }
         item.name = row[0];         // first column from csv file
@@ -132,7 +163,7 @@ void loadInventoryFromFile() {
         Inventory[item.name].amount = item.amount; // add amount if duplicate item name is found
     }
     inventoryFile.close();
-    localInventoryUpdated = true;
+    localInventoryIsUpdated = true;
 }
 
 void addItemToInventory() {
@@ -149,13 +180,13 @@ void addItemToInventory() {
     cin >> item.amount;
     inventoryFile << item.name << "," << item.price << "," << item.amount << endl;
     inventoryFile.close();
-    localInventoryUpdated = false;
+    localInventoryIsUpdated = false;
 }
 
 void viewInventory() {
     loadInventoryFromFile();
     // If the Inventory map still isn't updated after loading it, just cancel.
-    if (!localInventoryUpdated) { return; }
+    if (!localInventoryIsUpdated) { return; }
     clearScreen();
     createTableHeaders();
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
@@ -166,7 +197,7 @@ void viewInventory() {
 
 void searchInventory() {
     viewInventory();
-    if (!localInventoryUpdated) { return; }
+    if (!localInventoryIsUpdated) { return; }
     string query{ "" };
     cout << "\n\nEnter the Name of Item to Search: ";
     getline(cin, query);
@@ -175,8 +206,6 @@ void searchInventory() {
         createTableHeaders();
         printRowOfInventory(Inventory[query].name, Inventory[query].price, Inventory[query].amount);
     }
-
-    // todo: implement this part
 }
 
 void createTableHeaders() {
@@ -186,7 +215,7 @@ void createTableHeaders() {
     cout << setfill('*') << setw(colWidth) << "*" << endl;
 }
 
-void printRowOfInventory(string name, float price, int amount) {
+void printRowOfInventory(string& name, float& price, int& amount) {
     printf("| %-20s | $%-20.2f | %d\n", name.c_str(), price, amount);
 }
 
@@ -196,7 +225,6 @@ bool is_digits(const string& str) {
 
 void showInvalidOptionError() {
     cout << "Invalid, Try again\n";
-    pauseThenClearScreen();
 }
 
 void pauseScreen() {
@@ -209,6 +237,13 @@ void pauseThenClearScreen() {
     clearScreen();
 }
 
+void flushInputBuffer() {
+    cin.clear();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+}
+
+// This defined twice to perform an overload.
+// C++ will automatically detect which one we're trying to use based on the parameters.
 bool didFileOpen(ifstream& inventoryFile) {
     if (!inventoryFile.is_open()) {
         cout << "Couldn't open file...\n";
@@ -224,16 +259,11 @@ bool didFileOpen(ofstream& inventoryFile) {
     return true;
 }
 
-bool doesItemAlreadyExist(string itemName) {
+bool doesItemAlreadyExist(string& itemName) {
     if (Inventory.find(itemName) != Inventory.end()) {
         cout << "This Item already exists. Going back main menu..\n";
         return true;
     }
-    return false;
-}
-
-bool isLocalInventoryUpdated() {
-    if (localInventoryUpdated) { return true; }
     return false;
 }
 
