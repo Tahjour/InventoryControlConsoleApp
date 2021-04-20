@@ -14,9 +14,9 @@ using namespace std;
 class Item {
     // Access Specifier. "public:" makes the attributes of the Item class accessible anywhere.
 public:
-    string itemName{ "" }; // The Item's name.
-    float itemPrice{ 0 };  // The Item's Price.
-    int itemAmount{ 0 };   // The Item's Amount.
+    string name{ "" }; // The Item's name.
+    float price{ 0 };  // The Item's Price.
+    int amount{ 0 };   // The Item's Amount.
 };
 
 // This map will aid in reading the Inventory CSV file.
@@ -37,6 +37,7 @@ void showInvalidOptionError();
 bool is_digits(const string&);
 void pauseScreen();
 void clearScreen();
+void pauseThenClearScreen();
 void showMenu(const string&);
 void checkNextStepBasedOnMenu(string&, string&);
 
@@ -52,9 +53,6 @@ int main() {
 
         if (option.length() != 1 || !is_digits(option)) {
             showInvalidOptionError();
-            pauseScreen();
-            clearScreen();
-            continue;
         } else {
             checkNextStepBasedOnMenu(option, thisMenuName);
         }
@@ -78,6 +76,7 @@ bool is_digits(const string& str) {
 
 void showInvalidOptionError() {
     cout << "Invalid, Try again\n";
+    pauseThenClearScreen();
 }
 
 void pauseScreen() {
@@ -89,7 +88,7 @@ void pauseScreen() {
 void clearScreen() {
 // These are macros.
 // Unfortunately, depending on the Operating System, the command is different to clear the console screen.
-// So, I'm checking to see if the user is using (linux, unix, mac PC) or (32-bit or 64-bit Windows PC)
+// So, I'm checking to see if the user is using (linux or unix or mac) or (32-bit or 64-bit Windows)
 // This is just to make sure the code is more portable. If I just used the system("cls") command, it would only work on Windows computers.
 #if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
     system("clear");
@@ -98,6 +97,11 @@ void clearScreen() {
 #if defined(_WIN32) || defined(_WIN64)
     system("cls");
 #endif
+}
+
+void pauseThenClearScreen() {
+    pauseScreen();
+    clearScreen();
 }
 
 void checkNextStepBasedOnMenu(string& option, string& menuName) {
@@ -114,8 +118,6 @@ void checkNextStepBasedOnMenu(string& option, string& menuName) {
                 break;
             default:
                 showInvalidOptionError();
-                pauseScreen();
-                clearScreen();
                 return;
         }
     }
@@ -125,27 +127,28 @@ void addItemToInventory() {
     ofstream inventoryFile{ "Inventory.csv", ios_base::app };
     if (!inventoryFile.is_open()) {
         cout << "Couldn't open file...\n";
+        pauseThenClearScreen();
         return;
     }
     Item item;
     cout << "\n";
     cout << "Enter the Item's Name: ";
     cin.ignore();
-    getline(cin, item.itemName);
+    getline(cin, item.name);
     cout << "Enter the Item's Price: ";
-    cin >> item.itemPrice;
+    cin >> item.price;
     cout << "Enter the Item's Amount: ";
-    cin >> item.itemAmount;
-    inventoryFile << item.itemName << "," << item.itemPrice << "," << item.itemAmount << endl;
+    cin >> item.amount;
+    inventoryFile << item.name << "," << item.price << "," << item.amount << endl;
     inventoryFile.close();
-    pauseScreen();
-    clearScreen();
+    pauseThenClearScreen();
 }
 
 void viewInventory() {
     ifstream inventoryFile{ "Inventory.csv" };
     if (!inventoryFile.is_open()) {
         cout << "Couldn't open file...\n";
+        pauseThenClearScreen();
         return;
     }
     string rowString, colString;
@@ -157,25 +160,27 @@ void viewInventory() {
         while (getline(str, colString, ',')) {
             row.push_back(colString);
         }
-        item.itemName = row[0];
-        item.itemPrice = stof(row[1]);
-        item.itemAmount = stoi(row[2]);
-        Inventory[item.itemName].itemName = item.itemName;
-        Inventory[item.itemName].itemPrice += item.itemPrice;
-        Inventory[item.itemName].itemAmount += item.itemAmount;
+        item.name = row[0];         // first column from csv file
+        item.price = stof(row[1]);  // second column
+        item.amount = stoi(row[2]); // third column
+
+        // Adding a new {key, value} pair to the Inventory map.
+        // The key is the item's name and the value is an instance of an Item Object.
+        Inventory[item.name].name = item.name;
+        Inventory[item.name].price += item.price;   // add price if duplicate item name is found
+        Inventory[item.name].amount += item.amount; // add amount if duplicate item name is found
     }
     clearScreen();
     // Table Headers
-    int colwidth{ 60 };
-    cout << setfill('*') << setw(colwidth) << "*" << endl;
+    int colWidth{ 60 };
+    cout << setfill('*') << setw(colWidth) << "*" << endl;
     printf("| %-20s | %-20s | %s\n", "Item Name", "Item Price", "Item Amount");
-    cout << setfill('*') << setw(colwidth) << "*" << endl;
+    cout << setfill('*') << setw(colWidth) << "*" << endl;
 
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
-        // C-Style printing to console to specify spacing for table display.
-        printf("| %-20s | $%-20.2f | %d\n", (*it).second.itemName.c_str(), (*it).second.itemPrice, (*it).second.itemAmount);
+        // C-Style console printing to specify spacing for table display.
+        printf("| %-20s | $%-20.2f | %d\n", (*it).second.name.c_str(), (*it).second.price, (*it).second.amount);
     }
     inventoryFile.close();
-    pauseScreen();
-    clearScreen();
+    pauseThenClearScreen();
 }
