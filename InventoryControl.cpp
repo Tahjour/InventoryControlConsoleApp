@@ -29,7 +29,7 @@ map<string, Item> Inventory;
 // By the way, a vector is a dynamic array or a way to store a sequence of data and modify it while the program is running.
 // In the vector, we're just going to store all the prompts of each menu.
 map<string, vector<string>> MenuList{
-    { "MainMenu", { "1|> Add an Inventory Item\n", "2|> View Inventory\n", "3|> Search Inventory\n" } },
+    { "MainMenu", { "1|> Add an Inventory Item\n", "2|> View Inventory\n" } },
     { "ViewInventoryMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n" } }
 };
 bool localInventoryIsUpdated{ false };
@@ -49,6 +49,7 @@ bool doesItemAlreadyExist(string&);
 void printRowOfInventory(string&, float&, int&);
 void createTableHeaders();
 void flushInputBuffer();
+void searchForEditing(string&, vector<string>&);
 
 //Menu functions
 int main();
@@ -58,8 +59,8 @@ void viewInventoryMenu();
 void addItemToInventory();
 void loadInventoryFromFile();
 void viewInventory();
-void searchInventory();
 void editInventoryItem();
+void deleteInventoryItem();
 
 int main() {
     string option{ "" };
@@ -112,10 +113,6 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
                 break;
             case 2:
                 viewInventoryMenu();
-                pauseThenClearScreen();
-                break;
-            case 3:
-                searchInventory();
                 pauseThenClearScreen();
                 break;
             default:
@@ -197,45 +194,59 @@ void viewInventory() {
     }
 }
 
-void searchInventory() {
-    viewInventory();
-    if (!localInventoryIsUpdated) { return; }
-    string query{ "" };
-    cout << "\n\nEnter the Name of an Item to Search: ";
-    getline(cin, query);
-    if (Inventory.find(query) != Inventory.end()) {
-        clearScreen();
-        createTableHeaders();
-        printRowOfInventory(Inventory[query].name, Inventory[query].price, Inventory[query].amount);
-    }
-}
-
 void editInventoryItem() {
     viewInventory();
     if (!localInventoryIsUpdated) { return; }
     string query{ "" };
-    int resultsFound{ 0 };
+    Item item;
+    vector<string> itemNameResults;
+
     cout << "\n\nEnter Item Name to Select: ";
     getline(cin, query);
+
+    searchForEditing(query, itemNameResults);
+    if (itemNameResults.size() > 1) {
+        do {
+            cout << "\nPlease Specify the Item's Name: ";
+            getline(cin, query);
+            searchForEditing(query, itemNameResults);
+        } while (itemNameResults.size() != 1);
+    }
+    if (itemNameResults.size() == 1) {
+        cout << "\nEdit the Item's Name: ";
+        getline(cin, item.name);
+        cout << "Edit the Item's Price: ";
+        cin >> item.price;
+        cout << "Edit the Item's Amount: ";
+        cin >> item.amount;
+        map<string, Item>::iterator itemBeingEdited = Inventory.find(itemNameResults[0]);
+        Inventory.erase(itemBeingEdited);
+        Inventory.insert(make_pair(item.name, item));
+        ofstream updateInventoryFile{ "Inventory.csv" };
+        if (!didFileOpen(updateInventoryFile)) { return; }
+        for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
+            updateInventoryFile << it->second.name << "," << it->second.price << "," << it->second.amount << endl;
+        }
+        localInventoryIsUpdated = false;
+        updateInventoryFile.close();
+    }
+}
+
+void searchForEditing(string& query, vector<string>& itemNameResults) {
+    itemNameResults.clear();
     if (Inventory.find(query) != Inventory.end()) {
-        resultsFound = 1;
         printRowOfInventory(Inventory[query].name, Inventory[query].price, Inventory[query].amount);
+        itemNameResults.push_back(Inventory[query].name);
     } else {
         for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
             if ((it->first.find(query) != string::npos)) {
-                printRowOfInventory(it->second.name, it->second.price, it->second.amount);
-                resultsFound++;
+                printRowOfInventory(it->second.name, it->second.price, it->second.amount); // Print each row of matches found
+                itemNameResults.push_back(it->second.name);                                // Push each match to the results vector
             }
         }
-    }
-    if (resultsFound == 1) {
-        cout << "Edit the Item's Name: ";
-        cin >> Inventory[query].name;
-        cout << "Edit the Item's Price: ";
-        cin >> Inventory[query].price;
-        cout << "Edit the Item's Amount: ";
-        cin >> Inventory[query].amount;
-        // todo: Finish this part
+        if (itemNameResults.size() == 0) {
+            cout << "No Matches...\n";
+        }
     }
 }
 
@@ -276,18 +287,18 @@ void flushInputBuffer() {
 // This defined twice to perform an overload.
 // C++ will automatically detect which one we're trying to use based on the parameters.
 bool didFileOpen(ifstream& inventoryFile) {
-    if (!inventoryFile.is_open()) {
-        cout << "Couldn't open file...\n";
-        return false;
+    if (inventoryFile.is_open()) {
+        return true;
     }
-    return true;
+    cout << "Couldn't open file...\n";
+    return false;
 }
 bool didFileOpen(ofstream& inventoryFile) {
-    if (!inventoryFile.is_open()) {
-        cout << "Couldn't open file...\n";
-        return false;
+    if (inventoryFile.is_open()) {
+        return true;
     }
-    return true;
+    cout << "Couldn't open file...\n";
+    return false;
 }
 
 bool doesItemAlreadyExist(string& itemName) {
