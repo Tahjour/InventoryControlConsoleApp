@@ -127,7 +127,9 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
         switch (optionNum) {
             case 0:
                 return;
-            case 1: //todo: Edit an Item
+            case 1:
+                editInventoryItem();
+                pauseThenClearScreen();
                 break;
             case 2: //todo: Delete an Item
                 break;
@@ -199,12 +201,41 @@ void searchInventory() {
     viewInventory();
     if (!localInventoryIsUpdated) { return; }
     string query{ "" };
-    cout << "\n\nEnter the Name of Item to Search: ";
+    cout << "\n\nEnter the Name of an Item to Search: ";
     getline(cin, query);
     if (Inventory.find(query) != Inventory.end()) {
         clearScreen();
         createTableHeaders();
         printRowOfInventory(Inventory[query].name, Inventory[query].price, Inventory[query].amount);
+    }
+}
+
+void editInventoryItem() {
+    viewInventory();
+    if (!localInventoryIsUpdated) { return; }
+    string query{ "" };
+    int resultsFound{ 0 };
+    cout << "\n\nEnter Item Name to Select: ";
+    getline(cin, query);
+    if (Inventory.find(query) != Inventory.end()) {
+        resultsFound = 1;
+        printRowOfInventory(Inventory[query].name, Inventory[query].price, Inventory[query].amount);
+    } else {
+        for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
+            if ((it->first.find(query) != string::npos)) {
+                printRowOfInventory(it->second.name, it->second.price, it->second.amount);
+                resultsFound++;
+            }
+        }
+    }
+    if (resultsFound == 1) {
+        cout << "Edit the Item's Name: ";
+        cin >> Inventory[query].name;
+        cout << "Edit the Item's Price: ";
+        cin >> Inventory[query].price;
+        cout << "Edit the Item's Amount: ";
+        cin >> Inventory[query].amount;
+        // todo: Finish this part
     }
 }
 
