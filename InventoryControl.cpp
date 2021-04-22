@@ -33,6 +33,7 @@ map<string, vector<string>> MenuList{
     { "ViewInventoryMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n" } }
 };
 bool localInventoryIsUpdated{ false };
+const string MainInventoryFileName{ "Inventory.csv" };
 
 // Funtion Declarations
 // Helper Functions: Most of these are to help with minimizing code repetition or error checking.
@@ -43,13 +44,11 @@ void clearScreen();
 void pauseThenClearScreen();
 void showMenuAndCheckOption(const string&, string&);
 void checkNextStepBasedOnMenu(string&, const string&);
-bool didFileOpen(ifstream&);
-bool didFileOpen(ofstream&);
+bool doesFileExist(fstream&);
 bool doesItemAlreadyExist(string&);
 void printRowOfInventory(string&, float&, int&);
 void createTableHeaders();
 void flushInputBuffer();
-void searchForEditing(string&, vector<string>&);
 
 //Menu functions
 int main();
@@ -59,14 +58,14 @@ void viewInventoryMenu();
 void addItemToInventory();
 void loadInventoryFromFile();
 void viewInventory();
-void editInventoryItem();
-void deleteInventoryItem();
+void searchForEditing(string&, vector<string>&);
+void editOrDeleteInventoryItem(string&);
+void editOrDeleteResultFound(vector<string>&, Item&, string&, fstream&);
 
 int main() {
     string option{ "" };
     string thisMenuName{ "MainMenu" };
     showMenuAndCheckOption(thisMenuName, option);
-
     cout << "Thanks for using the program! See Ya!" << endl;
     return 0;
 }
@@ -81,6 +80,7 @@ void showMenuAndCheckOption(const string& menuNameKey, string& option) {
     do {
         if (menuNameKey == "ViewInventoryMenu") {
             viewInventory();
+            if (!localInventoryIsUpdated) { return; }
             cout << "\n\n";
         }
         for (int x{ 0 }; x < MenuList[menuNameKey].size(); x++) {
@@ -121,14 +121,18 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
                 return;
         }
     } else if (menuName == "ViewInventoryMenu") {
+        string editcommand{ "edit" };
+        string deleteCommand{ "delete" };
         switch (optionNum) {
             case 0:
                 return;
             case 1:
-                editInventoryItem();
+                editOrDeleteInventoryItem(editcommand);
                 pauseThenClearScreen();
                 break;
-            case 2: //todo: Delete an Item
+            case 2:
+                editOrDeleteInventoryItem(deleteCommand);
+                pauseThenClearScreen();
                 break;
             default:
                 showInvalidOptionError();
@@ -140,8 +144,8 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
 
 void loadInventoryFromFile() {
     if (localInventoryIsUpdated) { return; }
-    ifstream inventoryFile{ "Inventory.csv" };
-    if (!didFileOpen(inventoryFile)) { return; }
+    fstream inventoryFile{ MainInventoryFileName, ios_base::in };
+    if (!doesFileExist(inventoryFile)) { return; }
     string rowString, colString;
     Item item;
     vector<string> row;
@@ -161,14 +165,13 @@ void loadInventoryFromFile() {
         Inventory[item.name].price = item.price;   // add price if duplicate item name is found
         Inventory[item.name].amount = item.amount; // add amount if duplicate item name is found
     }
-    inventoryFile.close();
     localInventoryIsUpdated = true;
 }
 
 void addItemToInventory() {
+    fstream inventoryFile{ MainInventoryFileName, ios_base::app };
     loadInventoryFromFile();
-    ofstream inventoryFile{ "Inventory.csv", ios_base::app };
-    if (!didFileOpen(inventoryFile)) { return; }
+    if (!doesFileExist(inventoryFile)) { return; }
     Item item;
     cout << "\nEnter the Item's Name: ";
     getline(cin, item.name);
@@ -178,7 +181,6 @@ void addItemToInventory() {
     cout << "Enter the Item's Amount: ";
     cin >> item.amount;
     inventoryFile << item.name << "," << item.price << "," << item.amount << endl;
-    inventoryFile.close();
     localInventoryIsUpdated = false;
 }
 
@@ -194,7 +196,7 @@ void viewInventory() {
     }
 }
 
-void editInventoryItem() {
+void editOrDeleteInventoryItem(string& operation) {
     viewInventory();
     if (!localInventoryIsUpdated) { return; }
     string query{ "" };
@@ -212,41 +214,53 @@ void editInventoryItem() {
             searchForEditing(query, itemNameResults);
         } while (itemNameResults.size() != 1);
     }
-    if (itemNameResults.size() == 1) {
+    if (itemNameResults.size() == 1 && operation == "edit") {
         cout << "\nEdit the Item's Name: ";
         getline(cin, item.name);
         cout << "Edit the Item's Price: ";
         cin >> item.price;
         cout << "Edit the Item's Amount: ";
         cin >> item.amount;
-        map<string, Item>::iterator itemBeingEdited = Inventory.find(itemNameResults[0]);
-        Inventory.erase(itemBeingEdited);
-        Inventory.insert(make_pair(item.name, item));
-        ofstream updateInventoryFile{ "Inventory.csv" };
-        if (!didFileOpen(updateInventoryFile)) { return; }
-        for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
-            updateInventoryFile << it->second.name << "," << it->second.price << "," << it->second.amount << endl;
-        }
-        localInventoryIsUpdated = false;
-        updateInventoryFile.close();
+        fstream updateInventoryFile{ MainInventoryFileName, ios_base::out };
+        if (!doesFileExist(updateInventoryFile)) { return; }
+        editOrDeleteResultFound(itemNameResults, item, operation, updateInventoryFile);
+    }
+    if (itemNameResults.size() == 1 && operation == "delete") {
+        fstream updateInventoryFile{ MainInventoryFileName, ios_base::out };
+        if (!doesFileExist(updateInventoryFile)) { return; }
+        editOrDeleteResultFound(itemNameResults, item, operation, updateInventoryFile);
+    }
+    localInventoryIsUpdated = false;
+}
+
+void editOrDeleteResultFound(vector<string>& itemNameResults, Item& item, string& operation, fstream& updateInventoryFile) {
+    map<string, Item>::iterator itemBeingEdited = Inventory.find(itemNameResults[0]);
+    Inventory.erase(itemBeingEdited);
+    if (operation == "edit") { Inventory.insert(make_pair(item.name, item)); }
+    if (operation == "delete") { cout << "Deleted... \n"; }
+    for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
+        updateInventoryFile << it->second.name << "," << it->second.price << "," << it->second.amount << endl;
     }
 }
 
 void searchForEditing(string& query, vector<string>& itemNameResults) {
     itemNameResults.clear();
-    if (Inventory.find(query) != Inventory.end()) {
-        printRowOfInventory(Inventory[query].name, Inventory[query].price, Inventory[query].amount);
-        itemNameResults.push_back(Inventory[query].name);
-    } else {
-        for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
-            if ((it->first.find(query) != string::npos)) {
-                printRowOfInventory(it->second.name, it->second.price, it->second.amount); // Print each row of matches found
-                itemNameResults.push_back(it->second.name);                                // Push each match to the results vector
-            }
+    for (auto& c : query) { c = toupper(c); }
+    for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
+        string currentItemName{ it->first };
+        for (auto& c : currentItemName) { c = toupper(c); }
+        if (query == currentItemName) {
+            itemNameResults.clear();
+            itemNameResults.push_back(query);
+            break;
         }
-        if (itemNameResults.size() == 0) {
-            cout << "No Matches...\n";
+        if ((currentItemName.find(query) != string::npos)) {
+            printRowOfInventory(it->second.name, it->second.price, it->second.amount); // Print each row of matches found
+            itemNameResults.push_back(it->second.name);                                // Push each match to the results vector
         }
+    }
+    if (itemNameResults.size() == 0) {
+        cout << "No Matches...\n";
     }
 }
 
@@ -286,19 +300,13 @@ void flushInputBuffer() {
 
 // This defined twice to perform an overload.
 // C++ will automatically detect which one we're trying to use based on the parameters.
-bool didFileOpen(ifstream& inventoryFile) {
-    if (inventoryFile.is_open()) {
+bool doesFileExist(fstream& inventoryFile) {
+    if (inventoryFile.good()) {
         return true;
+    } else {
+        cout << "Inventory doesn't exist. Please add an Item\n";
+        return false;
     }
-    cout << "Couldn't open file...\n";
-    return false;
-}
-bool didFileOpen(ofstream& inventoryFile) {
-    if (inventoryFile.is_open()) {
-        return true;
-    }
-    cout << "Couldn't open file...\n";
-    return false;
 }
 
 bool doesItemAlreadyExist(string& itemName) {
