@@ -30,7 +30,7 @@ map<string, Item> Inventory;
 // In the vector, we're just going to store all the prompts of each menu.
 map<string, vector<string>> MenuList{
     { "MainMenu", { "1|> Add an Inventory Item\n", "2|> View Inventory\n" } },
-    { "ViewInventoryMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n" } }
+    { "ViewInventoryMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n", "3|> Manage Purchase\n" } },
 };
 bool localInventoryIsUpdated{ false };
 const string MainInventoryFileName{ "Inventory.csv" };
@@ -58,9 +58,9 @@ void viewInventoryMenu();
 void addItemToInventory();
 void loadInventoryFromFile();
 void viewInventory();
-void searchForEditing(string&, vector<string>&);
-void editOrDeleteInventoryItem(string&);
-void editOrDeleteResultFound(vector<string>&, Item&, string&, fstream&);
+void searchForInventoryItem(string&, vector<string>&);
+void editDeletePurchaseInventoryItem(string&);
+void editDeletePurchaseItemFound(vector<string>&, Item&, string&, fstream&);
 
 int main() {
     string option{ "" };
@@ -121,17 +121,22 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
                 return;
         }
     } else if (menuName == "ViewInventoryMenu") {
-        string editcommand{ "edit" };
+        string editCommand{ "edit" };
         string deleteCommand{ "delete" };
+        string purchaseCommand{ "purchase" };
         switch (optionNum) {
             case 0:
                 return;
             case 1:
-                editOrDeleteInventoryItem(editcommand);
+                editDeletePurchaseInventoryItem(editCommand);
                 pauseThenClearScreen();
                 break;
             case 2:
-                editOrDeleteInventoryItem(deleteCommand);
+                editDeletePurchaseInventoryItem(deleteCommand);
+                pauseThenClearScreen();
+                break;
+            case 3:
+                editDeletePurchaseInventoryItem(purchaseCommand);
                 pauseThenClearScreen();
                 break;
             default:
@@ -196,7 +201,7 @@ void viewInventory() {
     }
 }
 
-void editOrDeleteInventoryItem(string& operation) {
+void editDeletePurchaseInventoryItem(string& operation) {
     viewInventory();
     if (!localInventoryIsUpdated) { return; }
     string query{ "" };
@@ -206,12 +211,12 @@ void editOrDeleteInventoryItem(string& operation) {
     cout << "\n\nEnter Item Name to Select: ";
     getline(cin, query);
 
-    searchForEditing(query, itemNameResults);
+    searchForInventoryItem(query, itemNameResults);
     if (itemNameResults.size() > 1) {
         do {
             cout << "\nPlease Specify the Item's Name: ";
             getline(cin, query);
-            searchForEditing(query, itemNameResults);
+            searchForInventoryItem(query, itemNameResults);
         } while (itemNameResults.size() != 1);
     }
     if (itemNameResults.size() == 1 && operation == "edit") {
@@ -223,27 +228,59 @@ void editOrDeleteInventoryItem(string& operation) {
         cin >> item.amount;
         fstream updateInventoryFile{ MainInventoryFileName, ios_base::out };
         if (!doesFileExist(updateInventoryFile)) { return; }
-        editOrDeleteResultFound(itemNameResults, item, operation, updateInventoryFile);
+        editDeletePurchaseItemFound(itemNameResults, item, operation, updateInventoryFile);
     }
     if (itemNameResults.size() == 1 && operation == "delete") {
         fstream updateInventoryFile{ MainInventoryFileName, ios_base::out };
         if (!doesFileExist(updateInventoryFile)) { return; }
-        editOrDeleteResultFound(itemNameResults, item, operation, updateInventoryFile);
+        editDeletePurchaseItemFound(itemNameResults, item, operation, updateInventoryFile);
     }
-    localInventoryIsUpdated = false;
+    if (itemNameResults.size() == 1 && operation == "purchase") {
+        float customerCash{ 0 }, customerChange{ 0 }, totalCost;
+        int itemPurchaseAmount{ 0 };
+        cout << "\nEnter the Amount: ";
+        cin >> itemPurchaseAmount;
+        cout << "Enter Customer's Pay: ";
+        cin >> customerCash;
+        flushInputBuffer();
+        item.name = Inventory[itemNameResults[0]].name;
+        item.amount = Inventory[itemNameResults[0]].amount;
+        item.price = Inventory[itemNameResults[0]].price;
+        totalCost = itemPurchaseAmount * item.price;
+        if (itemPurchaseAmount > item.amount || itemPurchaseAmount < 0) {
+            cout << "\nThat Amount is Not Available...\n";
+            cout << "Amount of " << item.name << " = " << item.amount;
+            return;
+        }
+        if (totalCost > customerCash) {
+            cout << "\nThere is not enough cash to pay...\n";
+            cout << "Customer needs $" << (totalCost - customerCash) << " more to pruchase...\n";
+            cout << "Total Cost = $" << totalCost << endl;
+            return;
+        }
+        item.amount = item.amount - itemPurchaseAmount;
+        customerChange = customerCash - totalCost;
+        cout << endl
+             << item.name << " purchased...\n";
+        cout << "Customer's Change = $" << customerChange << endl;
+        fstream updateInventoryFile{ MainInventoryFileName, ios_base::out };
+        if (!doesFileExist(updateInventoryFile)) { return; }
+        editDeletePurchaseItemFound(itemNameResults, item, operation, updateInventoryFile);
+    }
 }
 
-void editOrDeleteResultFound(vector<string>& itemNameResults, Item& item, string& operation, fstream& updateInventoryFile) {
+void editDeletePurchaseItemFound(vector<string>& itemNameResults, Item& item, string& operation, fstream& updateInventoryFile) {
     map<string, Item>::iterator itemBeingEdited = Inventory.find(itemNameResults[0]);
     Inventory.erase(itemBeingEdited);
-    if (operation == "edit") { Inventory.insert(make_pair(item.name, item)); }
+    if (operation == "edit" || operation == "purchase") { Inventory.insert(make_pair(item.name, item)); }
     if (operation == "delete") { cout << "Deleted... \n"; }
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
         updateInventoryFile << it->second.name << "," << it->second.price << "," << it->second.amount << endl;
     }
+    localInventoryIsUpdated = false;
 }
 
-void searchForEditing(string& query, vector<string>& itemNameResults) {
+void searchForInventoryItem(string& query, vector<string>& itemNameResults) {
     itemNameResults.clear();
     for (auto& c : query) { c = toupper(c); }
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
@@ -298,8 +335,6 @@ void flushInputBuffer() {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
-// This defined twice to perform an overload.
-// C++ will automatically detect which one we're trying to use based on the parameters.
 bool doesFileExist(fstream& inventoryFile) {
     if (inventoryFile.good()) {
         return true;
