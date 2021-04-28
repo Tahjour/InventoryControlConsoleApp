@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iomanip>
 #include <limits>
+#include <ctime>
 
 // Using namespace std so we don't have to type "std::" before everything.
 using namespace std;
@@ -29,8 +30,8 @@ map<string, Item> Inventory;
 // By the way, a vector is a dynamic array or a way to store a sequence of data and modify it while the program is running.
 // In the vector, we're just going to store all the prompts of each menu.
 map<string, vector<string>> MenuList{
-    { "MainMenu", { "1|> Add an Inventory Item\n", "2|> View Inventory\n" } },
-    { "ViewInventoryMenu", { "1|> Edit an Item\n", "2|> Delete an Item\n", "3|> Manage Purchase\n" } },
+    { "MainMenu", { "1|-> Add an Inventory Item\n", "2|-> View Inventory\n" } },
+    { "ViewInventoryMenu", { "1|-> Edit an Item\n", "2|-> Delete an Item\n", "3|-> Manage Purchase\n" } },
 };
 bool localInventoryIsUpdated{ false };
 const string MainInventoryFileName{ "Inventory.csv" };
@@ -38,17 +39,18 @@ const string MainInventoryFileName{ "Inventory.csv" };
 // Funtion Declarations
 // Helper Functions: Most of these are to help with minimizing code repetition or error checking.
 void showInvalidOptionError();
-bool is_digits(const string&);
 void pauseScreen();
 void clearScreen();
 void pauseThenClearScreen();
-void showMenuAndCheckOption(const string&, string&);
-void checkNextStepBasedOnMenu(string&, const string&);
-bool doesFileExist(fstream&);
-bool doesItemAlreadyExist(string&);
-void printRowOfInventory(string&, float&, int&);
+bool is_digits(const string& inputString);
+void showMenuAndCheckOption(const string& menuNameKey, string& option);
+void checkNextStepBasedOnMenu(string& option, const string& menuName);
+bool doesFileExist(fstream& file);
+bool doesItemAlreadyExist(string& itemName);
+void printRowOfInventory(Item& item);
 void createTableHeaders();
 void flushInputBuffer();
+void createLogEntry(Item& item, string& operation);
 
 //Menu functions
 int main();
@@ -186,6 +188,8 @@ void addItemToInventory() {
     cout << "Enter the Item's Amount: ";
     cin >> item.amount;
     inventoryFile << item.name << "," << item.price << "," << item.amount << endl;
+    string operation = "add";
+    createLogEntry(item, operation);
     localInventoryIsUpdated = false;
 }
 
@@ -197,7 +201,7 @@ void viewInventory() {
     createTableHeaders();
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
         // C-Style console printing to specify spacing for table display.
-        printRowOfInventory((*it).second.name, (*it).second.price, (*it).second.amount);
+        printRowOfInventory(it->second);
     }
 }
 
@@ -236,17 +240,20 @@ void editDeletePurchaseInventoryItem(string& operation) {
         editDeletePurchaseItemFound(itemNameResults, item, operation, updateInventoryFile);
     }
     if (itemNameResults.size() == 1 && operation == "purchase") {
-        float customerCash{ 0 }, customerChange{ 0 }, totalCost;
+        float customerCash{ 0 }, customerChange{ 0 }, totalCost{ 0 };
         int itemPurchaseAmount{ 0 };
-        cout << "\nEnter the Amount: ";
-        cin >> itemPurchaseAmount;
-        cout << "Enter Customer's Pay: ";
-        cin >> customerCash;
-        flushInputBuffer();
         item.name = Inventory[itemNameResults[0]].name;
         item.amount = Inventory[itemNameResults[0]].amount;
         item.price = Inventory[itemNameResults[0]].price;
+        cout << "\nCustomer Requested Amount: ";
+        cin >> itemPurchaseAmount;
+
         totalCost = itemPurchaseAmount * item.price;
+        cout << "Total Cost = $" << totalCost << endl;
+        cout << "\nEnter Customer's Pay: ";
+        cin >> customerCash;
+        flushInputBuffer();
+
         if (itemPurchaseAmount > item.amount || itemPurchaseAmount < 0) {
             cout << "\nThat Amount is Not Available...\n";
             cout << "Amount of " << item.name << " = " << item.amount;
@@ -254,8 +261,7 @@ void editDeletePurchaseInventoryItem(string& operation) {
         }
         if (totalCost > customerCash) {
             cout << "\nThere is not enough cash to pay...\n";
-            cout << "Customer needs $" << (totalCost - customerCash) << " more to pruchase...\n";
-            cout << "Total Cost = $" << totalCost << endl;
+            cout << "Customer needs $" << (totalCost - customerCash) << " more to purchase...\n";
             return;
         }
         item.amount = item.amount - itemPurchaseAmount;
@@ -271,9 +277,16 @@ void editDeletePurchaseInventoryItem(string& operation) {
 
 void editDeletePurchaseItemFound(vector<string>& itemNameResults, Item& item, string& operation, fstream& updateInventoryFile) {
     map<string, Item>::iterator itemBeingEdited = Inventory.find(itemNameResults[0]);
-    Inventory.erase(itemBeingEdited);
-    if (operation == "edit" || operation == "purchase") { Inventory.insert(make_pair(item.name, item)); }
-    if (operation == "delete") { cout << "Deleted... \n"; }
+    if (operation == "delete") {
+        createLogEntry(itemBeingEdited->second, operation);
+        Inventory.erase(itemBeingEdited);
+        cout << "Deleted... \n";
+    }
+    if (operation == "edit" || operation == "purchase") {
+        createLogEntry(itemBeingEdited->second, operation);
+        Inventory.erase(itemBeingEdited);
+        Inventory.insert(make_pair(item.name, item));
+    }
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
         updateInventoryFile << it->second.name << "," << it->second.price << "," << it->second.amount << endl;
     }
@@ -292,8 +305,8 @@ void searchForInventoryItem(string& query, vector<string>& itemNameResults) {
             break;
         }
         if ((currentItemName.find(query) != string::npos)) {
-            printRowOfInventory(it->second.name, it->second.price, it->second.amount); // Print each row of matches found
-            itemNameResults.push_back(it->second.name);                                // Push each match to the results vector
+            printRowOfInventory(it->second);            // Print each row of matches found
+            itemNameResults.push_back(it->second.name); // Push each match to the results vector
         }
     }
     if (itemNameResults.size() == 0) {
@@ -308,12 +321,12 @@ void createTableHeaders() {
     cout << setfill('*') << setw(colWidth) << "*" << endl;
 }
 
-void printRowOfInventory(string& name, float& price, int& amount) {
-    printf("| %-20s | $%-20.2f | %d\n", name.c_str(), price, amount);
+void printRowOfInventory(Item& item) {
+    printf("| %-20s | $%-20.2f | %d\n", item.name.c_str(), item.price, item.amount);
 }
 
-bool is_digits(const string& str) {
-    return str.find_first_not_of("0123456789") == string::npos;
+bool is_digits(const string& inputString) {
+    return inputString.find_first_not_of("0123456789") == string::npos;
 }
 
 void showInvalidOptionError() {
@@ -335,8 +348,8 @@ void flushInputBuffer() {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
-bool doesFileExist(fstream& inventoryFile) {
-    if (inventoryFile.good()) {
+bool doesFileExist(fstream& file) {
+    if (file.good()) {
         return true;
     } else {
         cout << "Inventory doesn't exist. Please add an Item\n";
@@ -350,6 +363,26 @@ bool doesItemAlreadyExist(string& itemName) {
         return true;
     }
     return false;
+}
+
+void createLogEntry(Item& item, string& operation) {
+    // todo: Fix this up
+    fstream logFile{ "Log.csv", ios_base::app };
+    time_t t = time(0); // get time now
+    localtime(&t);
+    if (!doesFileExist(logFile)) { return; }
+    if (operation == "add") {
+        logFile << "ADDITION," << item.name << "," << ctime(&t);
+    }
+    if (operation == "edit") {
+        logFile << "EDIT," << item.name << "," << ctime(&t);
+    }
+    if (operation == "delete") {
+        logFile << "DELETION," << item.name << "," << ctime(&t);
+    }
+    if (operation == "purchase") {
+        logFile << "PURCHASE," << item.name << "," << ctime(&t);
+    }
 }
 
 void clearScreen() {
