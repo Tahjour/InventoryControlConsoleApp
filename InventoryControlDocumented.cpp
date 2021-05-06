@@ -9,17 +9,26 @@
 #include <limits>
 #include <ctime>
 
+// Using namespace std so we don't have to type "std::" before everything.
 using namespace std;
 
+// This is the class for the inventories Items.
 class Item {
+    // Access Specifier. "public:" makes the attributes of the Item class accessible anywhere.
 public:
-    string name{ "" };
-    float price{ 0 };
-    int amount{ 0 };
+    string name{ "" }; // The Item's name.
+    float price{ 0 };  // The Item's Price.
+    int amount{ 0 };   // The Item's Amount.
 };
 
+// This map will aid in reading the Inventory CSV file.
+// A map is a key and value pair. In this map, the name of the item will be the key and an object of the Item class will be the value.
 map<string, Item> Inventory;
 
+//This map was created to minimize the repetition of menu prompts. We will simply create the menus in this map and access them accordingly.
+// So far, we just have the Main Menu called "MainMenu" and it only has one prompt inside the vector.
+// By the way, a vector is a dynamic array or a way to store a sequence of data and modify it while the program is running.
+// In the vector, we're just going to store all the prompts of each menu.
 map<string, vector<string>> MenuList{
     { "MainMenu", { "1|-> Add an Inventory Item\n", "2|-> View Inventory\n" } },
     { "ViewInventoryMenu", { "1|-> Edit an Item\n", "2|-> Delete an Item\n", "3|-> Manage Purchase\n" } },
@@ -56,9 +65,9 @@ void editDeletePurchaseInventoryItem(string&);
 void editDeletePurchaseItemFound(vector<string>&, Item&, string&, fstream&);
 
 int main() {
-    string option{ "" };
-    string thisMenuName{ "MainMenu" };
-    showMenuAndCheckOption(thisMenuName, option);
+    string option{ "" };                          // this variable takes the user input
+    string thisMenuName{ "MainMenu" };            // This just the name of the current menu
+    showMenuAndCheckOption(thisMenuName, option); // Using the name of the menu and the user input to check next step.
     cout << "Thanks for using the program! See Ya!" << endl;
     return 0;
 }
@@ -71,33 +80,39 @@ void viewInventoryMenu() {
 
 void showMenuAndCheckOption(const string& menuNameKey, string& option) {
 
-    do {
+    do { // Inside this loop, we're displaying the menu options and checking if user input is valid.
         if (menuNameKey == "ViewInventoryMenu") {
+            //1.  If the current menu is the ViewInventoryMenu, then view the inventory.
             viewInventory();
+            //2. Check if the global inventory status variable is still false after loading and viewing(This should not happen)
+            // If it is still false, then return.
             if (!localInventoryIsUpdated) { return; }
             cout << "\n\n";
         }
 
+        // This for loop displays the current menu's options based on the menu name from the MenuList map.
         for (int x{ 0 }; x < MenuList[menuNameKey].size(); x++) {
             cout << MenuList[menuNameKey].at(x);
         }
-        cout << "\n";
-        cout << "Enter Option Number(0 to Exit): ";
-        cin >> option;
+        cout << "\n";                               // printing an empty line for a better look
+        cout << "Enter Option Number(0 to Exit): "; // Prompt for user input (User chooses an option)
+        cin >> option;                              // Taking the user's input (The option)
 
         if (option.length() != 1 || !is_digits(option)) {
-            showInvalidOptionError();
-            flushInputBuffer();
-            pauseThenClearScreen();
+            showInvalidOptionError(); // custom function that just let's user know their input was invalid.
+            flushInputBuffer();       // custom function that clears the input buffer to avoid skipping
+            pauseThenClearScreen();   // custom function that pauses, then clears the screen.
         } else {
+            // This function uses switch statements to determine the next step based the option and name of the menu.
             checkNextStepBasedOnMenu(option, menuNameKey);
         }
-    } while (option != "0");
+    } while (option != "0"); // the do-while loop will run for as long as the option is not zero "0".
 }
 
 void checkNextStepBasedOnMenu(string& option, const string& menuName) {
-    int optionNum = stoi(option);
+    int optionNum = stoi(option); // Changing the string option to an integer. String-To-Integer.
     if (menuName == "MainMenu") {
+        // Perform a task based on the option integer.
         switch (optionNum) {
             case 0:
                 return;
@@ -116,6 +131,8 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
                 return;
         }
     } else if (menuName == "ViewInventoryMenu") {
+        // These are just some strings to help the editDeletePurchaseInventoryItem function differentiate which task is happening.
+        // The editDeletePurchaseInventoryItem handles the editing, deleting and purchasing of the items
         string editCommand{ "edit" };
         string deleteCommand{ "delete" };
         string purchaseCommand{ "purchase" };
@@ -143,24 +160,27 @@ void checkNextStepBasedOnMenu(string& option, const string& menuName) {
 }
 
 void loadInventoryFromFile() {
-    if (localInventoryIsUpdated) { return; }
-    fstream inventoryFile{ MainInventoryFileName, ios_base::in };
-    if (!doesFileExist(inventoryFile)) { return; }
-    string rowString, colString;
-    Item item;
-    vector<string> row;
+    if (localInventoryIsUpdated) { return; } // If the local Inventory map is already up to date, return because there is no need to read from the file again.
+    fstream inventoryFile{ MainInventoryFileName, ios_base::in }; // Opening the inventory file for reading.
+    if (!doesFileExist(inventoryFile)) { return; } // Checking if the file opened succesfully and return if it wasn't.
+    string rowString, colString; // String to help with reading the csv format
+    Item item; // An object of the Item class that will hold the data read from the file, then take a place in the local Inventory map.
+    vector<string> row; // A dynamic array that will store each word in a row of the Inventory csv file to an index.
     while (getline(inventoryFile, rowString)) {
-        row.clear();
-        stringstream strTemp{ rowString };
-        while (getline(strTemp, colString, ',')) {
-            row.push_back(colString);
+        row.clear();                       // empty the dynamic array so it doesn't keep on appending passed index 2 (Only expecting 3 columns/words)
+        stringstream strTemp{ rowString }; // This is to help with the getline fucntion, since it expects an istream
+        while (getline(strTemp, colString, ',')) { //Getting each word that is separated by a comma in a row.
+            row.push_back(colString); // Pushing the words to the dynamic array.
         }
-        item.name = row[0];
-        item.price = stof(row[1]);
-        item.amount = stoi(row[2]);
+        item.name = row[0];         // first column from csv file
+        item.price = stof(row[1]);  // second column
+        item.amount = stoi(row[2]); // third column
+
+        // Adding a new {key, value} pair to the Inventory map.
+        // The key is the item's name and the value is an instance of an Item Object.
         Inventory[item.name].name = item.name;
-        Inventory[item.name].price = item.price;
-        Inventory[item.name].amount = item.amount;
+        Inventory[item.name].price = item.price;   // add price if duplicate item name is found
+        Inventory[item.name].amount = item.amount; // add amount if duplicate item name is found
     }
     localInventoryIsUpdated = true;
 }
@@ -185,10 +205,12 @@ void addItemToInventory() {
 
 void viewInventory() {
     loadInventoryFromFile();
+    // If the Inventory map still isn't updated after loading it, just cancel.
     if (!localInventoryIsUpdated) { return; }
     clearScreen();
     createTableHeaders();
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
+        // C-Style console printing to specify spacing for table display.
         printRowOfInventory(it->second);
     }
 }
@@ -293,8 +315,8 @@ void searchForInventoryItem(string& query, vector<string>& itemNameResults) {
             break;
         }
         if ((currentItemName.find(query) != string::npos)) {
-            printRowOfInventory(it->second);
-            itemNameResults.push_back(it->second.name);
+            printRowOfInventory(it->second);            // Print each row of matches found
+            itemNameResults.push_back(it->second.name); // Push each match to the results vector
         }
     }
     if (itemNameResults.size() == 0) {
@@ -356,7 +378,7 @@ bool doesItemAlreadyExist(string& itemName) {
 void createLogEntry(Item& item, string& operation) {
     // todo: Fix this up
     fstream logFile{ "Log.csv", ios_base::app };
-    time_t t = time(0);
+    time_t t = time(0); // get time now
     localtime(&t);
     if (!doesFileExist(logFile)) { return; }
     if (operation == "add") {
@@ -374,6 +396,10 @@ void createLogEntry(Item& item, string& operation) {
 }
 
 void clearScreen() {
+// These are macros.
+// Unfortunately, depending on the Operating System, the command is different to clear the console screen.
+// So, I'm checking to see if the user is using (linux or unix or mac) or (32-bit or 64-bit Windows)
+// This is just to make sure the code is more portable. If I just used the system("cls") command, it would only work on Windows computers.
 #if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
     system("clear");
 #endif
