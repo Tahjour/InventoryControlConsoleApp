@@ -21,11 +21,13 @@ public:
 map<string, Item> Inventory;
 
 map<string, vector<string>> MenuList{
-    { "MainMenu", { "1|-> Add an Inventory Item\n", "2|-> View Inventory\n" } },
-    { "ViewInventoryMenu", { "1|-> Edit an Item\n", "2|-> Delete an Item\n", "3|-> Manage Purchase\n" } },
+    { "MainMenu", { "Add Inventory Item\n", "View Inventory\n" } },
+    { "ViewInventoryMenu", { "Edit an Item\n", "Delete an Item\n", "Manage Purchase\n" } },
 };
 bool localInventoryIsUpdated{ false };
 const string MainInventoryFileName{ "Inventory.csv" };
+clock_t timerStart;
+clock_t timerEnd;
 
 // Funtion Declarations
 // Helper Functions: Most of these are to help with minimizing code repetition or error checking.
@@ -60,6 +62,7 @@ int main() {
     string thisMenuName{ "MainMenu" };
     showMenuAndCheckOption(thisMenuName, option);
     cout << "Thanks for using the program! See Ya!" << endl;
+    pauseScreen();
     return 0;
 }
 
@@ -79,7 +82,7 @@ void showMenuAndCheckOption(const string& menuNameKey, string& option) {
         }
 
         for (int x{ 0 }; x < MenuList[menuNameKey].size(); x++) {
-            cout << MenuList[menuNameKey].at(x);
+            cout << x + 1 << "|-> " << MenuList[menuNameKey].at(x);
         }
         cout << "\n";
         cout << "Enter Option Number(0 to Exit): ";
@@ -90,6 +93,7 @@ void showMenuAndCheckOption(const string& menuNameKey, string& option) {
             flushInputBuffer();
             pauseThenClearScreen();
         } else {
+            flushInputBuffer();
             checkNextStepBasedOnMenu(option, menuNameKey);
         }
     } while (option != "0");
@@ -184,9 +188,13 @@ void addItemToInventory() {
 }
 
 void viewInventory() {
+    timerStart = clock();
     loadInventoryFromFile();
+    timerEnd = clock();
     if (!localInventoryIsUpdated) { return; }
     clearScreen();
+    double timeSpent = (double)(timerEnd - timerStart) / CLOCKS_PER_SEC;
+    cout << "Loading Time = " << timeSpent << "s" << endl;
     createTableHeaders();
     for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
         printRowOfInventory(it->second);
@@ -310,7 +318,7 @@ void createTableHeaders() {
 }
 
 void printRowOfInventory(Item& item) {
-    printf("| %-20s | $%-20.2f | %d\n", item.name.c_str(), item.price, item.amount);
+    printf("| %-20s | $%-19.2f | %d\n", item.name.c_str(), item.price, item.amount);
 }
 
 bool is_digits(const string& inputString) {
@@ -340,15 +348,21 @@ bool doesFileExist(fstream& file) {
     if (file.good()) {
         return true;
     } else {
-        cout << "Inventory doesn't exist. Please add an Item\n";
+        cout << "Inventory File Could Not Be Opened\n";
         return false;
     }
 }
 
 bool doesItemAlreadyExist(string& itemName) {
-    if (Inventory.find(itemName) != Inventory.end()) {
-        cout << "This Item already exists. Going back main menu..\n";
-        return true;
+    string tempItem = itemName;
+    for (auto& c : tempItem) { c = toupper(c); }
+    for (map<string, Item>::iterator it = Inventory.begin(); it != Inventory.end(); it++) {
+        string currentItemName{ it->first };
+        for (auto& c : currentItemName) { c = toupper(c); }
+        if (itemName == currentItemName) {
+            cout << "This Item already exists. Going back main menu..\n";
+            return true;
+        }
     }
     return false;
 }
